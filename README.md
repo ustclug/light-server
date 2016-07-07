@@ -1,1 +1,1 @@
-# docker-openvpn
+# docker-squid
