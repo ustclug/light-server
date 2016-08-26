@@ -1,13 +1,9 @@
-FROM centos:7
+FROM smartentry/centos:7-0.3.1
 
-MAINTAINER Yifan Gao "git@gaoyifan.com"
+MAINTAINER Yifan Gao <docker@yfgao.com>
 
-COPY assets /etc/docker-assets
+COPY . $ASSETS_DIR
 
-COPY entrypoint/entrypoint.sh /sbin/entrypoint.sh
-
-RUN /sbin/entrypoint.sh build
-
-ENTRYPOINT ["/sbin/entrypoint.sh"]
+RUN smartentry.sh build
 
 CMD ["/usr/sbin/squid", "-N", "-f", "/etc/squid/squid.conf"]
