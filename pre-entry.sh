@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+NGHTTPX_WORKERS=${NGHTTPX_WORKERS:-`getconf _NPROCESSORS_ONLN`}

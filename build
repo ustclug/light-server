@@ -1,5 +1,3 @@
 #!/bin/bash
 
-yum install -y squid
-
-yum clean all
+apk add --no-cache squid nghttp2 supervisor

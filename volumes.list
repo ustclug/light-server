@@ -1,2 +1,4 @@
 /var/log/squid
+/var/log/nghttpx
+/var/log/supervisor
 /etc/squid
