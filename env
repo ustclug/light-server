@@ -1,4 +1,3 @@
 RADIUS_SERVER = light-freeradius
 RADIUS_SECRET = testing123
 SQUID_DNS     = 10.254.0.253
-NGHTTPX_LOG   = /var/log/nghttpx/access.log
