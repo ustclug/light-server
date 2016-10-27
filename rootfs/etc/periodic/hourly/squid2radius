@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cd /opt/squid2radius
+python squid2radius.py /var/log/squid/access.log {{RADIUS_SERVER}} {{RADIUS_SECRET}}
