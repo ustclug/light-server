@@ -1,3 +1,4 @@
-RADIUS_SERVER = light-freeradius
-RADIUS_SECRET = testing123
-SQUID_DNS     = 10.254.0.253
+RADIUS_SERVER   = light-freeradius
+RADIUS_SECRET   = testing123
+SQUID_DNS       = 10.254.0.253
+NGHTTP2_VERSION = v1.17.0

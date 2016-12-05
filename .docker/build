@@ -3,11 +3,35 @@
 set -x
 set -e
 
-apk add --no-cache squid squid-lang-zh nghttp2 supervisor py2-pip ca-certificates openssl
-pip install pyrad hurry.filesize
+build_nghttp2(){
+    apk add openssl libgcc libstdc++ jemalloc libev
+    apk add --virtual build-deps openssl-dev gcc g++ git jemalloc-dev libev-dev autoconf automake make libtool
+    NGHTTP2_SRC=/usr/local/src/nghttp2
+    git clone --branch=$NGHTTP2_VERSION --depth=1 https://github.com/nghttp2/nghttp2.git $NGHTTP2_SRC
+    cd $NGHTTP2_SRC
+    autoreconf -i 
+    automake
+    autoconf
+    ./configure
+    make -j `getconf _NPROCESSORS_ONLN`
+    make install-strip
 
-wget -O- https://github.com/jiehanzheng/squid2radius/archive/14e23cbdf9d4a95a32b7ae3e53e1efe4823d34fd.tar.gz | tar -C /opt -xzf -
-cd /opt
-mv squid2radius-* squid2radius
+    cd /
+    rm -rf $NGHTTP2_SRC
+}
+build_squid2radius(){
+    apk add py-pip ca-certificates openssl
+    pip install pyrad hurry.filesize
+    wget -O- https://github.com/jiehanzheng/squid2radius/archive/14e23cbdf9d4a95a32b7ae3e53e1efe4823d34fd.tar.gz | tar -C /opt -xzf -
+    cd /opt
+    mv squid2radius-* squid2radius
+}
 
+apk update
+apk add squid squid-lang-zh supervisor
+build_squid2radius
+build_nghttp2
+
+apk del --purge build-deps
+rm -rf /var/cache/apk/*
 rm /etc/logrotate.d/squid
