@@ -1,6 +1,9 @@
 #!/bin/bash
 
-apk add --no-cache squid squid-lang-zh nghttp2 supervisor py2-pip ca-certificates
+set -x
+set -e
+
+apk add --no-cache squid squid-lang-zh nghttp2 supervisor py2-pip ca-certificates openssl
 pip install pyrad hurry.filesize
 
 wget -O- https://github.com/jiehanzheng/squid2radius/archive/14e23cbdf9d4a95a32b7ae3e53e1efe4823d34fd.tar.gz | tar -C /opt -xzf -
