@@ -1,4 +1,10 @@
-#!/bin/sh
+#!/bin/bash
 
 cd /opt/squid2radius
 python squid2radius.py /var/log/squid/access.log {{RADIUS_SERVER}} {{RADIUS_SECRET}}
+cd /var/log/squid/
+if [[ -f access.log.23 ]]; then
+    cat access.log.* > archive_access.log
+    rm access.log.*
+    savelog -c {{LOG_NUM}} archive_access.log
+fi
