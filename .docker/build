@@ -31,6 +31,10 @@ apk update
 apk add squid squid-lang-zh supervisor
 build_squid2radius
 build_nghttp2
+mkdir -p \
+    /var/log/supervisor \
+    /var/log/nghttpx \
+    /var/log/squid
 
 apk del --purge build-deps
 rm -rf /var/cache/apk/*
