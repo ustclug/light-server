@@ -28,7 +28,7 @@ build_squid2radius(){
 }
 
 apk update
-apk add squid squid-lang-zh supervisor
+apk add squid squid-lang-zh supervisor tzdata
 build_squid2radius
 build_nghttp2
 mkdir -p \

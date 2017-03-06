@@ -1,3 +1,4 @@
 #!/bin/sh
 
+ln -sf /usr/share/zoneinfo/$TZ /etc/localtime
 chown -R root:squid /etc/squid
