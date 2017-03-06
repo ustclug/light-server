@@ -22,9 +22,9 @@ build_nghttp2(){
 build_squid2radius(){
     apk add py-pip ca-certificates openssl
     pip install pyrad hurry.filesize
-    wget -O- https://github.com/jiehanzheng/squid2radius/archive/14e23cbdf9d4a95a32b7ae3e53e1efe4823d34fd.tar.gz | tar -C /opt -xzf -
     cd /opt
-    mv squid2radius-* squid2radius
+    wget -O- https://github.com/billzhong/squidlog/archive/f1dcaef70eb2aa21253682b1d9c754da784e473b.tar.gz | tar -xzf -
+    mv squidlog-* squid2radius
 }
 
 apk update
