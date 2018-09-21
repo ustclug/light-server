@@ -27,8 +27,19 @@ build_squid2radius(){
     mv squidlog-* squid2radius
 }
 
+build_telegraf(){
+    apk add --virtual build-deps build-base go git
+    export GOPATH=/go
+    go get github.com/influxdata/telegraf
+    cd $GOPATH/src/github.com/influxdata/telegraf
+    git checkout $TELEGRAF_VERSION
+    make
+    install -m755 $GOPATH/bin/telegraf /usr/bin/
+}
+
 apk update
 apk add squid squid-lang-zh supervisor tzdata
+build_telegraf
 build_squid2radius
 build_nghttp2
 mkdir -p \
