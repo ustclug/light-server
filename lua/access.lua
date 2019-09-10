@@ -61,7 +61,7 @@ end
 
 local function reject(err, status_code)
     status_code = status_code or 407
-    ngx.header["Proxy-Authenticate"] = 'Basic realm=""'
+    ngx.header["Proxy-Authenticate"] = 'Basic realm="Light Accelerator"'
     ngx.header["X-Access-Point-Error"] = err
     ngx.exit(status_code)
 end
