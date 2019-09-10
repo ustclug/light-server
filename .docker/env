@@ -1,0 +1,8 @@
+STAT_LISTEN                =  localhost:8000
+STAT_SERVER_NAME           =  localhost
+LIGHT_SERVER_LISTEN        =  29979
+LIGHT_SERVER_LISTEN_SSL    =  29980
+NGINX_SSL_CERTIFICATE      =  ssl/server.crt
+NGINX_SSL_CERTIFICATE_KEY  =  ssl/server.key
+NGINX_RESOLVER             =  8.8.8.8
+PROXY_CONNECT_ALLOW_PORTS  =  80 443 5228
