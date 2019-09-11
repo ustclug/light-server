@@ -15,3 +15,4 @@ RUN mkdir -p ssl/
 WORKDIR ssl/
 RUN openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -subj '/CN=light-accelerator-default-certificate' -keyout server.key -out server.crt
 COPY lua/ /usr/local/openresty/nginx/lua/
+CMD ["/usr/local/openresty/bin/openresty"]
