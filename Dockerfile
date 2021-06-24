@@ -1,6 +1,6 @@
-FROM gaoyifan/openresty:light-fat
+FROM ustclug/openresty:light-fat
 RUN apk add --no-cache bash tar
-ADD https://raw.githubusercontent.com/gaoyifan/smartentry/v0.4.2/smartentry.sh /sbin/smartentry.sh
+ADD https://raw.githubusercontent.com/gaoyifan/smartentry/v0.4.4/smartentry.sh /sbin/smartentry.sh
 RUN chmod +x /sbin/smartentry.sh
 ENV ASSETS_DIR="/opt/smartentry/HEAD"
 ENTRYPOINT ["/sbin/smartentry.sh"]
@@ -14,5 +14,5 @@ RUN rm nginx.conf
 RUN mkdir -p ssl/
 WORKDIR ssl/
 RUN openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -subj '/CN=light-accelerator-default-certificate' -keyout server.key -out server.crt
+RUN cp server.crt chain.pem
 COPY lua/ /usr/local/openresty/nginx/lua/
-CMD ["/usr/local/openresty/bin/openresty"]
