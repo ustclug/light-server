@@ -5,7 +5,7 @@ set -e
 
 build_squid2radius(){
     apk add py-pip ca-certificates openssl
-    pip install pyrad hurry.filesize
+    pip install pyrad==2.1 hurry.filesize==0.9
     cd /opt
     wget -O- https://github.com/billzhong/squidlog/archive/f1dcaef70eb2aa21253682b1d9c754da784e473b.tar.gz | tar -xzf -
     mv squidlog-* squid2radius
