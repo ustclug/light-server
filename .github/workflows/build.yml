@@ -6,7 +6,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      IMAGE: "ghcr.io/${{ github.repository }}:latest"
+      IMAGE: "${{ github.repository }}:latest"
     steps:
       - uses: actions/checkout@v2
       - name: Build Docker image
@@ -16,5 +16,5 @@ jobs:
       - name: Push to Docker Hub
         if: "github.repository == 'ustclug/light-server'"
         run: |
-          docker login -u "${{ github.actor }}" -p "${{ github.token }}" ghcr.io
+          docker login -u "${{ secrets.DOCKER_USER }}" -p "${{ secrets.DOCKER_PASS }}"
           docker push "$IMAGE"
