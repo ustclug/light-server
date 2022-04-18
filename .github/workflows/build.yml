@@ -13,6 +13,7 @@ jobs:
         run: |
           docker pull "$IMAGE"
           docker build --cache-from "$IMAGE" -t build-image .
+          docker tag build-image "$IMAGE"
       - name: Push to Docker Hub
         if: "github.repository == 'ustclug/light-server'"
         run: |
