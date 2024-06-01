@@ -3,17 +3,14 @@
 set -x
 set -e
 
-build_squid2radius(){
+build_squid2radius_dependency(){
     apk add python3 py-pip ca-certificates openssl
     pip install pyrad==2.1 hurry.filesize==0.9
-    cd /opt
-    wget -O- https://github.com/MirageTurtle/squid2radius/archive/e4443e444082f70789f4ac2f0b8e583d741c7bcf.tar.gz | tar -xzf -
-    mv squid2radius-* squid2radius
 }
 
 apk update
 apk add squid squid-lang-zh nghttp2 supervisor tzdata
-build_squid2radius
+build_squid2radius_dependency
 mkdir -p \
     /var/log/supervisor \
     /var/log/nghttpx \
