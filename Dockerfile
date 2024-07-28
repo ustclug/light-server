@@ -1,6 +1,6 @@
-FROM smartentry/alpine:3.18
+FROM smartentry/alpine:3.20
 
-MAINTAINER Yifan Gao <docker@yfgao.com>
+LABEL maintainer="Yifan Gao <docker@yfgao.com>"
 
 COPY .docker $ASSETS_DIR
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD /opt/healthcheck.sh

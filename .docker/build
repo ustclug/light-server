@@ -5,7 +5,7 @@ set -e
 
 build_squid2radius_dependency(){
     apk add python3 py-pip ca-certificates openssl
-    pip install pyrad==2.1 hurry.filesize==0.9
+    pip install pyrad==2.1 --break-system-packages
 }
 
 apk update
