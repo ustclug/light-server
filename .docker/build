@@ -9,11 +9,10 @@ build_squid2radius_dependency(){
 }
 
 apk update
-apk add squid squid-lang-zh nghttp2 supervisor tzdata
+apk add squid squid-lang-zh supervisor tzdata
 build_squid2radius_dependency
 mkdir -p \
     /var/log/supervisor \
-    /var/log/nghttpx \
     /var/log/squid
 
 rm -rf /var/cache/apk/*

@@ -11,5 +11,4 @@ check_process() {
 }
 
 check_process "squid"
-check_process "nghttpx"
 check_process "crond"
