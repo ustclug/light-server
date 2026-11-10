@@ -1,0 +1,10 @@
+listen: 127.0.0.1:8000
+radius_auth_server: light-freeradius:1812
+radius_accounting_server: light-freeradius:1813
+radius_secret: ${RADIUS_SECRET}
+nas_identifier: squid
+radius_timeout: 3s
+cache_duration: 30m
+log_path: /var/log/gost/gost.log
+health_path: /var/log/gost/accounting.last
+retention: 180

@@ -1,2 +1,0 @@
-server {{RADIUS_SERVER}}
-secret {{RADIUS_SECRET}}

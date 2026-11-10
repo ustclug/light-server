@@ -1,0 +1,71 @@
+log:
+  output: stderr
+  level: info
+  format: json
+
+authers:
+  - name: radius
+    plugin:
+      type: http
+      addr: http://127.0.0.1:8000/auth
+
+resolvers:
+  - name: light-dns
+    nameservers:
+      - addr: udp://10.254.0.253:53
+        timeout: 5s
+
+bypasses:
+  - name: allow
+    whitelist: true
+    matchers:
+      - "*:80"
+      - "*:443"
+      - "*:5228"
+      - github.com:22
+      - gitlab.com:22
+  - name: deny
+    matchers:
+      - 100.64.0.0/10
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 202.38.93.62
+      - 202.38.64.58
+      - 202.38.64.59
+      - 210.45.224.65
+      - 202.38.96.193
+      - .wlt.ustc.edu.cn
+      - .api.lib.ustc.edu.cn
+
+recorders:
+  - name: accounting
+    file:
+      path: /var/log/gost/gost.log
+      sep: "\n"
+
+services:
+  - &default
+    name: auto
+    addr: 0.0.0.0:29979
+    resolver: light-dns
+    bypasses: [allowed, deny]
+    handler:
+      type: auto
+      auther: radius
+      metadata:
+        dialTimeout: 5s
+        readTimeout: 15s
+    listener:
+      type: tcp
+    recorders:
+      - name: accounting
+        record: recorder.service.handler
+  - name: auto-tls
+    <<: *default
+    addr: 0.0.0.0:29980
+    listener:
+      type: tls
+      tls:
+        certFile: /opt/ssl/server.crt
+        keyFile: /opt/ssl/server.key

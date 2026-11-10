@@ -1,6 +1,0 @@
-#!/bin/sh
-
-[[ -f /var/run/squid.pid ]] && rm /var/run/squid.pid
-
-ln -sf /usr/share/zoneinfo/$TZ /etc/localtime
-chown -R root:squid /etc/squid
