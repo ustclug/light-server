@@ -8,3 +8,10 @@ cache_duration: 30m
 log_path: /var/log/gost/gost.log
 health_path: /var/log/gost/accounting.last
 retention: 180
+# bypasses:
+#   - name: example
+#     file: /path/to/file
+#     # prefer-ipv6: false
+#     # refresh: 24h
+#   - name: another
+#     url: https://example.com/cidrs.txt

@@ -1,2 +1,2 @@
 #!/bin/sh
-exec /usr/local/bin/plugin
+exec /usr/local/bin/plugin -C /opt/plugin.yml

@@ -3,32 +3,57 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
 
 func main() {
-	config, err := loadConfig("/opt/plugin.yml")
+	configPath := flag.String("C", "/opt/plugin.yml", "configuration file")
+	flag.Parse()
+
+	config, err := loadConfig(*configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	backend := newRadiusBackend(config)
 	handler := &authHandler{radius: backend, ttl: config.CacheDuration, now: time.Now, cache: make(map[string]authResult)}
-	server := &http.Server{Addr: config.Listen, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/auth" {
-			http.NotFound(w, r)
-			return
-		}
-		handler.ServeHTTP(w, r)
-	}), ReadHeaderTimeout: 5 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	acct := &accountant{config: config, sender: backend, now: time.Now}
+	bypasses, err := newBypassManager(ctx, config.Bypasses)
+	if err != nil {
+		log.Fatal(err)
+	}
+	bypasses.start(ctx)
+	server := &http.Server{Addr: config.Listen, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/auth" {
+			handler.ServeHTTP(w, r)
+		} else if strings.HasPrefix(r.URL.Path, "/bypass/") {
+			bypasses.ServeHTTP(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
+	}), ReadHeaderTimeout: 5 * time.Second}
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hup:
+				bypasses.reload(ctx)
+			}
+		}
+	}()
+	acct := &accountant{config: config, sender: backend, now: time.Now, prune: handler.pruneExpired}
 	go func() {
 		if err := os.MkdirAll(filepath.Dir(config.LogPath), 0755); err != nil {
 			log.Printf("initialize accounting: %v", err)
@@ -43,7 +68,7 @@ func main() {
 		defer cancel()
 		_ = server.Shutdown(shutdown)
 	}()
-	log.Printf("authentication plugin listening on %s", config.Listen)
+	log.Printf("plugin listening on %s", config.Listen)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}

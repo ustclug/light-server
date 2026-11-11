@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ type authHandler struct {
 	radius radiusAuthenticator
 	ttl    time.Duration
 	now    func() time.Time
+	logf   func(string, ...any)
 	mu     sync.Mutex
 	cache  map[string]authResult
 }
@@ -41,7 +43,6 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var req authRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil || req.Username == "" || req.Password == "" {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
@@ -58,9 +59,15 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mu.Unlock()
 	id, accepted, err := h.radius.Authenticate(r.Context(), req.Username, req.Password)
 	if err != nil {
+		h.logger()("authentication username=%q result=error: %v", req.Username, err)
 		http.Error(w, "authentication backend unavailable", http.StatusServiceUnavailable)
 		return
 	}
+	result := "rejected"
+	if accepted {
+		result = "accepted"
+	}
+	h.logger()("authentication username=%q result=%s", req.Username, result)
 	response := authResponse{OK: accepted}
 	if accepted {
 		if id == "" {
@@ -72,4 +79,21 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.cache[key] = authResult{response: response, expires: h.now().Add(h.ttl)}
 	h.mu.Unlock()
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (h *authHandler) logger() func(string, ...any) {
+	if h.logf != nil {
+		return h.logf
+	}
+	return log.Printf
+}
+
+func (h *authHandler) pruneExpired(now time.Time) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for key, result := range h.cache {
+		if !now.Before(result.expires) {
+			delete(h.cache, key)
+		}
+	}
 }

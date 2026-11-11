@@ -9,18 +9,28 @@ import (
 )
 
 type Config struct {
-	Listen                 string        `yaml:"listen"`
-	RadiusAuthServer       string        `yaml:"radius_auth_server"`
-	RadiusAccountingServer string        `yaml:"radius_accounting_server"`
-	RadiusSecret           string        `yaml:"radius_secret"`
-	NASIdentifier          string        `yaml:"nas_identifier"`
-	RadiusTimeout          time.Duration `yaml:"-"`
-	CacheDuration          time.Duration `yaml:"-"`
-	LogPath                string        `yaml:"log_path"`
-	Retention              int           `yaml:"retention"`
-	HealthPath             string        `yaml:"health_path"`
-	TimeoutText            string        `yaml:"radius_timeout"`
-	CacheText              string        `yaml:"cache_duration"`
+	Listen                 string         `yaml:"listen"`
+	RadiusAuthServer       string         `yaml:"radius_auth_server"`
+	RadiusAccountingServer string         `yaml:"radius_accounting_server"`
+	RadiusSecret           string         `yaml:"radius_secret"`
+	NASIdentifier          string         `yaml:"nas_identifier"`
+	RadiusTimeout          time.Duration  `yaml:"-"`
+	CacheDuration          time.Duration  `yaml:"-"`
+	LogPath                string         `yaml:"log_path"`
+	Retention              int            `yaml:"retention"`
+	HealthPath             string         `yaml:"health_path"`
+	TimeoutText            string         `yaml:"radius_timeout"`
+	CacheText              string         `yaml:"cache_duration"`
+	Bypasses               []BypassConfig `yaml:"bypasses"`
+}
+
+type BypassConfig struct {
+	Name        string        `yaml:"name"`
+	File        string        `yaml:"file"`
+	URL         string        `yaml:"url"`
+	PreferIPv6  bool          `yaml:"prefer-ipv6"`
+	Refresh     time.Duration `yaml:"-"`
+	RefreshText string        `yaml:"refresh"`
 }
 
 func loadConfig(path string) (Config, error) {
@@ -43,6 +53,29 @@ func loadConfig(path string) (Config, error) {
 	}
 	if c.CacheDuration, err = time.ParseDuration(c.CacheText); err != nil {
 		return c, fmt.Errorf("cache_duration: %w", err)
+	}
+	seenBypasses := make(map[string]struct{}, len(c.Bypasses))
+	for i := range c.Bypasses {
+		bypass := &c.Bypasses[i]
+		if bypass.Name == "" {
+			return c, fmt.Errorf("bypasses[%d].name is required", i)
+		}
+		if _, ok := seenBypasses[bypass.Name]; ok {
+			return c, fmt.Errorf("duplicate bypass name %q", bypass.Name)
+		}
+		seenBypasses[bypass.Name] = struct{}{}
+		if bypass.File == "" && bypass.URL == "" {
+			return c, fmt.Errorf("bypass %q requires file or url", bypass.Name)
+		}
+		if bypass.RefreshText != "" {
+			bypass.Refresh, err = time.ParseDuration(bypass.RefreshText)
+			if err != nil {
+				return c, fmt.Errorf("bypass %q refresh: %w", bypass.Name, err)
+			}
+			if bypass.Refresh <= 0 {
+				return c, fmt.Errorf("bypass %q refresh must be positive", bypass.Name)
+			}
+		}
 	}
 	if c.RadiusSecret == "" {
 		return c, fmt.Errorf("radius_secret is required")

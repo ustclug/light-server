@@ -16,7 +16,7 @@ import (
 )
 
 type gostRecord struct {
-	ClientID    string `json:"clientID"`
+	User        string `json:"user"`
 	InputBytes  uint64 `json:"inputBytes"`
 	OutputBytes uint64 `json:"outputBytes"`
 }
@@ -35,16 +35,19 @@ func aggregate(r io.Reader) (map[string]uint64, error) {
 		}
 		var record gostRecord
 		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
-			return nil, fmt.Errorf("invalid GOST record: %w", err)
+			continue
 		}
-		if record.ClientID == "" {
+		if record.User == "" {
 			continue
 		}
 		sum := record.InputBytes + record.OutputBytes
-		if sum < record.InputBytes || totals[record.ClientID]+sum < totals[record.ClientID] {
-			return nil, fmt.Errorf("byte total overflow for %q", record.ClientID)
+		if sum == 0 {
+			continue
 		}
-		totals[record.ClientID] += sum
+		if sum < record.InputBytes || totals[record.User]+sum < totals[record.User] {
+			return nil, fmt.Errorf("byte total overflow for %q", record.User)
+		}
+		totals[record.User] += sum
 	}
 	return totals, scanner.Err()
 }
@@ -53,6 +56,7 @@ type accountant struct {
 	config Config
 	sender accountingSender
 	now    func() time.Time
+	prune  func(time.Time)
 }
 
 func (a *accountant) run(ctx context.Context) {
@@ -72,6 +76,9 @@ func (a *accountant) run(ctx context.Context) {
 }
 
 func (a *accountant) process(ctx context.Context) error {
+	if a.prune != nil {
+		a.prune(a.now())
+	}
 	if err := os.MkdirAll(filepath.Dir(a.config.LogPath), 0755); err != nil {
 		return err
 	}
@@ -182,13 +189,13 @@ func (a *accountant) archive(path string) error {
 	last := fmt.Sprintf("%s.archive.%d.gz", a.config.LogPath, a.config.Retention-1)
 	_ = os.Remove(last)
 	for i := a.config.Retention - 2; i >= 0; i-- {
-		old := fmt.Sprintf("%s.archive.%d", a.config.LogPath, i)
-		new := fmt.Sprintf("%s.archive.%d", a.config.LogPath, i+1)
+		oldName := fmt.Sprintf("%s.archive.%d", a.config.LogPath, i)
+		newName := fmt.Sprintf("%s.archive.%d", a.config.LogPath, i+1)
 		if i > 0 {
-			old += ".gz"
-			new += ".gz"
+			oldName += ".gz"
+			newName += ".gz"
 		}
-		_ = os.Rename(old, new)
+		_ = os.Rename(oldName, newName)
 	}
 	archive := a.config.LogPath + ".archive.0"
 	if err := os.Rename(path, archive); err != nil {
@@ -210,7 +217,11 @@ func compressFile(path string) error {
 	if err != nil {
 		return err
 	}
-	writer := gzip.NewWriter(target)
+	writer, err := gzip.NewWriterLevel(target, gzip.BestCompression)
+	if err != nil {
+		_ = target.Close()
+		return err
+	}
 	_, copyErr := io.Copy(writer, source)
 	closeGzipErr := writer.Close()
 	closeTargetErr := target.Close()
