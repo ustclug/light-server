@@ -16,7 +16,7 @@ RUN apk add --no-cache ca-certificates curl tar \
     | tar -xz -C /usr/local/bin gost
 
 FROM alpine:latest
-RUN apk add --no-cache ca-certificates s6 tzdata netcat-openbsd \
+RUN apk add --no-cache ca-certificates gettext netcat-openbsd s6 tzdata \
  && mkdir -p /etc/s6/gost /etc/s6/plugin /var/log/gost /opt
 COPY --from=plugin-build /out/plugin /usr/local/bin/plugin
 COPY --from=gost-download /usr/local/bin/gost /usr/local/bin/gost
