@@ -5,8 +5,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,20 +60,34 @@ type accountant struct {
 	now        func() time.Time
 	prune      func(time.Time)
 	postAction func(context.Context, string) error
+	logf       func(string, ...any)
 }
 
-func (a *accountant) run(ctx context.Context) {
+func (a *accountant) log(format string, args ...any) {
+	if a.logf != nil {
+		a.logf(format, args...)
+		return
+	}
+	log.Printf(format, args...)
+}
+
+func (a *accountant) run(ctx context.Context, force <-chan os.Signal) {
 	for {
 		now := a.now()
 		timer := time.NewTimer(time.Until(now.Truncate(time.Hour).Add(time.Hour)))
+		trigger := "timer"
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return
 		case <-timer.C:
-			if err := a.process(ctx); err != nil {
-				fmt.Fprintf(os.Stderr, "accounting: %v\n", err)
-			}
+		case <-force:
+			timer.Stop()
+			trigger = "SIGUSR1"
+		}
+		a.log("starting accounting on %s", trigger)
+		if err := a.process(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "accounting: %v\n", err)
 		}
 	}
 }
@@ -133,14 +149,29 @@ func (a *accountant) rotateActive(ctx context.Context) error {
 
 func (a *accountant) runPostAccountingAction(ctx context.Context) error {
 	if strings.TrimSpace(a.config.PostAccountingAction) == "" {
+		a.log(`"post_accounting_action" not set`)
 		return nil
 	}
+	a.log("executing post accounting action: %s", a.config.PostAccountingAction)
+	started := time.Now()
+	var err error
 	if a.postAction != nil {
-		return a.postAction(ctx, a.config.PostAccountingAction)
+		err = a.postAction(ctx, a.config.PostAccountingAction)
+	} else {
+		commandCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		err = exec.CommandContext(commandCtx, "/bin/sh", "-c", a.config.PostAccountingAction).Run()
 	}
-	commandCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	return exec.CommandContext(commandCtx, "/bin/sh", "-c", a.config.PostAccountingAction).Run()
+	status := 0
+	if err != nil {
+		status = -1
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
+			status = exitError.ExitCode()
+		}
+	}
+	a.log("executed post accounting action: status=%d duration=%.3fs", status, time.Since(started).Seconds())
+	return err
 }
 
 func (a *accountant) processFile(ctx context.Context, path string) error {

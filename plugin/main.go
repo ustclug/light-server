@@ -54,13 +54,16 @@ func main() {
 		}
 	}()
 	acct := &accountant{config: config, sender: backend, now: time.Now, prune: handler.pruneExpired}
+	usr1 := make(chan os.Signal, 1)
+	signal.Notify(usr1, syscall.SIGUSR1)
+	defer signal.Stop(usr1)
 	go func() {
 		if err := os.MkdirAll(filepath.Dir(config.LogPath), 0755); err != nil {
 			log.Printf("initialize accounting: %v", err)
 		} else if err := acct.processPending(ctx); err != nil {
 			log.Printf("initial accounting: %v", err)
 		}
-		acct.run(ctx)
+		acct.run(ctx, usr1)
 	}()
 	go func() {
 		<-ctx.Done()

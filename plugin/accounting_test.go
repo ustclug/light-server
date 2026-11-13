@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -44,6 +45,88 @@ func TestRotateActiveRunsPostAccountingAction(t *testing.T) {
 	data, err := os.ReadFile(pending)
 	require.NoError(t, err)
 	assert.Equal(t, "old log\n", string(data))
+}
+
+func TestPostAccountingActionLogging(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		action string
+		want   []string
+	}{
+		{
+			name: "not set",
+			want: []string{`"post_accounting_action" not set`},
+		},
+		{
+			name:   "executed",
+			action: "notify-gost --reload",
+			want: []string{
+				"executing post accounting action: notify-gost --reload",
+				"executed post accounting action: status=0 duration=",
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var messages []string
+			a := accountant{
+				config:     Config{PostAccountingAction: test.action},
+				postAction: func(context.Context, string) error { return nil },
+				logf: func(format string, args ...any) {
+					messages = append(messages, fmt.Sprintf(format, args...))
+				},
+			}
+			require.NoError(t, a.runPostAccountingAction(context.Background()))
+			require.Len(t, messages, len(test.want))
+			for i, want := range test.want {
+				assert.Contains(t, messages[i], want)
+			}
+			if test.action != "" {
+				assert.Regexp(t, `duration=\d+\.\d{3}s$`, messages[1])
+			}
+		})
+	}
+}
+
+func TestAccountantForceRun(t *testing.T) {
+	dir := t.TempDir()
+	healthPath := filepath.Join(dir, "accounting.last")
+	messages := make(chan string, 1)
+	a := accountant{
+		config: Config{
+			LogPath:    filepath.Join(dir, "gost.log"),
+			HealthPath: healthPath,
+			Retention:  2,
+		},
+		now: time.Now,
+		logf: func(format string, args ...any) {
+			messages <- fmt.Sprintf(format, args...)
+		},
+	}
+	force := make(chan os.Signal, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		a.run(ctx, force)
+	}()
+
+	force <- syscall.SIGUSR1
+	select {
+	case message := <-messages:
+		assert.Equal(t, "starting accounting on SIGUSR1", message)
+	case <-time.After(time.Second):
+		t.Fatal("accountant did not log its trigger")
+	}
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(healthPath)
+		return err == nil
+	}, time.Second, time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("accountant did not stop after cancellation")
+	}
 }
 
 func TestRotateActiveSkipsEmptyPostAccountingAction(t *testing.T) {
