@@ -229,7 +229,7 @@ func (a *accountant) archive(path string) error {
 	if err := os.Rename(path, archive); err != nil {
 		return err
 	}
-	return compressFile(archive + ".1")
+	return compressFile(a.config.LogPath + ".archive.1")
 }
 
 func compressFile(path string) error {

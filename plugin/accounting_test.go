@@ -1,9 +1,11 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -169,6 +171,37 @@ func TestRotateActiveKeepsRotatedFilesWhenPostAccountingActionFails(t *testing.T
 	data, err = os.ReadFile(matches[0])
 	require.NoError(t, err)
 	assert.Equal(t, "old log\n", string(data))
+}
+
+func TestArchiveRetainsAndCompressesRotatedFiles(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "gost.log")
+	a := accountant{config: Config{LogPath: logPath, Retention: 3}}
+
+	for i := 1; i <= 4; i++ {
+		pending := fmt.Sprintf("%s.pending.%d", logPath, i)
+		require.NoError(t, os.WriteFile(pending, []byte(fmt.Sprintf("rotation %d\n", i)), 0640))
+		require.NoError(t, a.archive(pending))
+	}
+
+	data, err := os.ReadFile(logPath + ".archive.0")
+	require.NoError(t, err)
+	assert.Equal(t, "rotation 4\n", string(data))
+
+	for index, want := range []string{"rotation 3\n", "rotation 2\n"} {
+		file, err := os.Open(fmt.Sprintf("%s.archive.%d.gz", logPath, index+1))
+		require.NoError(t, err)
+		reader, err := gzip.NewReader(file)
+		require.NoError(t, err)
+		data, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		require.NoError(t, reader.Close())
+		require.NoError(t, file.Close())
+		assert.Equal(t, want, string(data))
+	}
+
+	_, err = os.Stat(logPath + ".archive.3.gz")
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestAggregateIgnoresUnrelatedAndZeroByteLines(t *testing.T) {
