@@ -3,6 +3,8 @@ package main
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"layeh.com/radius/rfc2865"
 	"layeh.com/radius/rfc2866"
 	"layeh.com/radius/rfc2869"
@@ -11,22 +13,20 @@ import (
 func TestAccountingPacket(t *testing.T) {
 	const total = uint64(3)<<32 | 1234
 	packet, err := accountingPacket([]byte("secret"), "squid", "ibug", "session", total, rfc2866.AcctStatusType_Value_Stop)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := rfc2865.UserName_LookupString(packet); got != "ibug" {
-		t.Fatalf("User-Name = %q", got)
-	}
-	if got, _ := rfc2865.NASIdentifier_LookupString(packet); got != "squid" {
-		t.Fatalf("NAS-Identifier = %q", got)
-	}
-	if got, _ := rfc2866.AcctSessionID_LookupString(packet); got != "session" {
-		t.Fatalf("Acct-Session-Id = %q", got)
-	}
-	if got, _ := rfc2866.AcctOutputOctets_Lookup(packet); uint32(got) != 1234 {
-		t.Fatalf("Acct-Output-Octets = %d", got)
-	}
-	if got, _ := rfc2869.AcctOutputGigawords_Lookup(packet); uint32(got) != 3 {
-		t.Fatalf("Acct-Output-Gigawords = %d", got)
-	}
+	require.NoError(t, err)
+	userName, err := rfc2865.UserName_LookupString(packet)
+	require.NoError(t, err)
+	assert.Equal(t, "ibug", userName)
+	nasIdentifier, err := rfc2865.NASIdentifier_LookupString(packet)
+	require.NoError(t, err)
+	assert.Equal(t, "squid", nasIdentifier)
+	sessionID, err := rfc2866.AcctSessionID_LookupString(packet)
+	require.NoError(t, err)
+	assert.Equal(t, "session", sessionID)
+	outputOctets, err := rfc2866.AcctOutputOctets_Lookup(packet)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(1234), uint32(outputOctets))
+	outputGigawords, err := rfc2869.AcctOutputGigawords_Lookup(packet)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(3), uint32(outputGigawords))
 }

@@ -9,54 +9,41 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAggregateProvidedGOSTLog(t *testing.T) {
 	file, err := os.Open("../inbox/gost.log")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer file.Close()
 	totals, err := aggregate(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := totals["ibug"]; got != 178136 {
-		t.Fatalf("inputBytes + outputBytes = %d, want 178136", got)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, uint64(178136), totals["ibug"])
 }
 
 func TestRotateActiveRunsPostAccountingAction(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "gost.log")
-	if err := os.WriteFile(logPath, []byte("old log\n"), 0640); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(logPath, []byte("old log\n"), 0640))
 	now := time.Unix(123, 456)
 	a := accountant{
 		config: Config{LogPath: logPath, PostAccountingAction: "notify-gost --reload"},
 		now:    func() time.Time { return now },
 		postAction: func(_ context.Context, action string) error {
-			if action != "notify-gost --reload" {
-				t.Fatalf("action = %q", action)
-			}
-			if info, err := os.Stat(logPath); err != nil || info.Size() != 0 {
-				t.Fatalf("new active log: info=%v err=%v", info, err)
-			}
+			assert.Equal(t, "notify-gost --reload", action)
+			info, err := os.Stat(logPath)
+			require.NoError(t, err)
+			assert.Zero(t, info.Size())
 			return nil
 		},
 	}
-	if err := a.rotateActive(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, a.rotateActive(context.Background()))
 	pending := logPath + ".pending.123000000456"
 	data, err := os.ReadFile(pending)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "old log\n" {
-		t.Fatalf("pending log = %q", data)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "old log\n", string(data))
 }
 
 func TestRotateActiveSkipsEmptyPostAccountingAction(t *testing.T) {
@@ -64,20 +51,16 @@ func TestRotateActiveSkipsEmptyPostAccountingAction(t *testing.T) {
 		t.Run(fmt.Sprintf("action_%q", action), func(t *testing.T) {
 			dir := t.TempDir()
 			logPath := filepath.Join(dir, "gost.log")
-			if err := os.WriteFile(logPath, []byte("old log\n"), 0640); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, os.WriteFile(logPath, []byte("old log\n"), 0640))
 			a := accountant{
 				config: Config{LogPath: logPath, PostAccountingAction: action},
 				now:    func() time.Time { return time.Unix(123, 0) },
 				postAction: func(context.Context, string) error {
-					t.Fatal("post accounting action was called")
+					assert.Fail(t, "post accounting action was called")
 					return nil
 				},
 			}
-			if err := a.rotateActive(context.Background()); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, a.rotateActive(context.Background()))
 		})
 	}
 }
@@ -85,9 +68,7 @@ func TestRotateActiveSkipsEmptyPostAccountingAction(t *testing.T) {
 func TestRotateActiveKeepsRotatedFilesWhenPostAccountingActionFails(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "gost.log")
-	if err := os.WriteFile(logPath, []byte("old log\n"), 0640); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(logPath, []byte("old log\n"), 0640))
 	a := accountant{
 		config: Config{LogPath: logPath, PostAccountingAction: "false"},
 		now:    func() time.Time { return time.Unix(123, 0) },
@@ -95,27 +76,16 @@ func TestRotateActiveKeepsRotatedFilesWhenPostAccountingActionFails(t *testing.T
 			return errors.New("failed")
 		},
 	}
-	if err := a.rotateActive(context.Background()); err == nil || !strings.Contains(err.Error(), "post accounting action") {
-		t.Fatalf("error = %v", err)
-	}
+	assert.ErrorContains(t, a.rotateActive(context.Background()), "post accounting action")
 	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(data) != 0 {
-		t.Fatalf("new active log = %q", data)
-	}
+	require.NoError(t, err)
+	assert.Empty(t, data)
 	matches, err := filepath.Glob(logPath + ".pending.*")
-	if err != nil || len(matches) != 1 {
-		t.Fatalf("pending logs = %v, err = %v", matches, err)
-	}
+	require.NoError(t, err)
+	require.Len(t, matches, 1)
 	data, err = os.ReadFile(matches[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "old log\n" {
-		t.Fatalf("pending log = %q", data)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "old log\n", string(data))
 }
 
 func TestAggregateIgnoresUnrelatedAndZeroByteLines(t *testing.T) {
@@ -130,16 +100,6 @@ func TestAggregateIgnoresUnrelatedAndZeroByteLines(t *testing.T) {
 	}, "\n")
 
 	totals, err := aggregate(strings.NewReader(log))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := totals["alice"]; got != 18 {
-		t.Fatalf("alice total = %d, want 18", got)
-	}
-	if got := totals["bob"]; got != 30 {
-		t.Fatalf("bob total = %d, want 30", got)
-	}
-	if len(totals) != 2 {
-		t.Fatalf("totals = %#v", totals)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, map[string]uint64{"alice": 18, "bob": 30}, totals)
 }

@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type fakeAuthenticator struct {
@@ -39,33 +42,19 @@ func TestAuthenticationResponseAndCache(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, "/auth", strings.NewReader(body))
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
-		}
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		var response authResponse
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
 		return response
 	}
-	if got := request(); !got.OK || got.ID != "canonical" {
-		t.Fatalf("response = %+v", got)
-	}
+	assert.Equal(t, authResponse{OK: true, ID: "canonical"}, request())
 	_ = request()
-	if backend.calls != 1 {
-		t.Fatalf("backend calls = %d, want 1", backend.calls)
-	}
-	if len(logs) != 1 || logs[0] != "authentication username=\"alias\" result=accepted" {
-		t.Fatalf("logs after cache hit = %#v", logs)
-	}
+	assert.Equal(t, 1, backend.calls)
+	assert.Equal(t, []string{"authentication username=\"alias\" result=accepted"}, logs)
 	now = now.Add(31 * time.Minute)
 	_ = request()
-	if backend.calls != 2 {
-		t.Fatalf("backend calls after expiry = %d, want 2", backend.calls)
-	}
-	if len(logs) != 2 {
-		t.Fatalf("log count after cache expiry = %d, want 2", len(logs))
-	}
+	assert.Equal(t, 2, backend.calls)
+	assert.Len(t, logs, 2)
 }
 
 func TestPruneExpiredAuthenticationCache(t *testing.T) {
@@ -78,13 +67,7 @@ func TestPruneExpiredAuthenticationCache(t *testing.T) {
 
 	h.pruneExpired(now)
 
-	if _, ok := h.cache["expired"]; ok {
-		t.Fatal("expired entry was not pruned")
-	}
-	if _, ok := h.cache["boundary"]; ok {
-		t.Fatal("entry expiring at rollup time was not pruned")
-	}
-	if _, ok := h.cache["valid"]; !ok {
-		t.Fatal("valid entry was pruned")
-	}
+	assert.NotContains(t, h.cache, "expired")
+	assert.NotContains(t, h.cache, "boundary")
+	assert.Contains(t, h.cache, "valid")
 }
