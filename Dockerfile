@@ -24,6 +24,6 @@ COPY etc/s6/ /etc/s6/
 COPY etc/healthcheck.sh /etc/healthcheck.sh
 ENV TZ=Asia/Shanghai
 EXPOSE 29979 29980
-VOLUME ["/opt", "/var/log/gost"]
+VOLUME ["/opt"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD ["/etc/healthcheck.sh"]
 CMD ["s6-svscan", "/etc/s6"]
