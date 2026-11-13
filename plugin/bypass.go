@@ -115,6 +115,9 @@ func (b *bypass) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	b.mu.RLock()
 	matched := slices.ContainsFunc(ips, b.trie.search)
 	b.mu.RUnlock()
+	if b.config.Whitelist {
+		matched = !matched
+	}
 	_ = json.NewEncoder(w).Encode(bypassResponse{OK: matched})
 }
 

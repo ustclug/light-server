@@ -53,10 +53,11 @@ func aggregate(r io.Reader) (map[string]uint64, error) {
 }
 
 type accountant struct {
-	config Config
-	sender accountingSender
-	now    func() time.Time
-	prune  func(time.Time)
+	config     Config
+	sender     accountingSender
+	now        func() time.Time
+	prune      func(time.Time)
+	postAction func(context.Context, string) error
 }
 
 func (a *accountant) run(ctx context.Context) {
@@ -113,15 +114,6 @@ func (a *accountant) rotateActive(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := runS6(ctx, "-d", "-wD"); err != nil {
-		return fmt.Errorf("stop GOST for log rotation: %w", err)
-	}
-	restarted := false
-	defer func() {
-		if !restarted {
-			_ = runS6(context.Background(), "-u", "-wU")
-		}
-	}()
 	pending := fmt.Sprintf("%s.pending.%d", a.config.LogPath, a.now().UnixNano())
 	if err := os.Rename(a.config.LogPath, pending); err != nil {
 		return err
@@ -133,17 +125,22 @@ func (a *accountant) rotateActive(ctx context.Context) error {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	if err := runS6(ctx, "-u", "-wU"); err != nil {
-		return fmt.Errorf("restart GOST after log rotation: %w", err)
+	if err := a.runPostAccountingAction(ctx); err != nil {
+		return fmt.Errorf("post accounting action: %w", err)
 	}
-	restarted = true
 	return nil
 }
 
-func runS6(ctx context.Context, action, wait string) error {
+func (a *accountant) runPostAccountingAction(ctx context.Context) error {
+	if strings.TrimSpace(a.config.PostAccountingAction) == "" {
+		return nil
+	}
+	if a.postAction != nil {
+		return a.postAction(ctx, a.config.PostAccountingAction)
+	}
 	commandCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	return exec.CommandContext(commandCtx, "s6-svc", action, wait, "-T", "10000", "/etc/s6/gost").Run()
+	return exec.CommandContext(commandCtx, "/bin/sh", "-c", a.config.PostAccountingAction).Run()
 }
 
 func (a *accountant) processFile(ctx context.Context, path string) error {

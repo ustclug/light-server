@@ -30,6 +30,28 @@ func TestLoadConfigExpandsEnvironment(t *testing.T) {
 	if config.RadiusAccountingServer != "acct.example:11813" {
 		t.Fatalf("radius_accounting_server = %q", config.RadiusAccountingServer)
 	}
+	if config.PostAccountingAction != "" {
+		t.Fatalf("post_accounting_action = %q", config.PostAccountingAction)
+	}
+}
+
+func TestLoadConfigPostAccountingAction(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plugin.yml")
+	data := "radius_auth_server: auth.example:1812\n" +
+		"radius_accounting_server: acct.example:1813\n" +
+		"radius_secret: secret\n" +
+		"post_accounting_action: notify-gost --reload\n"
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := loadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.PostAccountingAction != "notify-gost --reload" {
+		t.Fatalf("post_accounting_action = %q", config.PostAccountingAction)
+	}
 }
 
 func TestLoadConfigRejectsDuplicateBypassNames(t *testing.T) {
@@ -56,7 +78,7 @@ func TestLoadConfigParsesBypassOptions(t *testing.T) {
 		"radius_accounting_server: acct.example:1813\n" +
 		"radius_secret: secret\n" +
 		"bypasses:\n" +
-		"  - name: geo\n    file: /geo.txt\n    prefer-ipv6: true\n    refresh: 1h\n"
+		"  - name: geo\n    file: /geo.txt\n    whitelist: true\n    prefer-ipv6: true\n    refresh: 1h\n"
 	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +87,7 @@ func TestLoadConfigParsesBypassOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Bypasses) != 1 || config.Bypasses[0].Refresh.String() != "1h0m0s" || !config.Bypasses[0].PreferIPv6 {
+	if len(config.Bypasses) != 1 || config.Bypasses[0].Refresh.String() != "1h0m0s" || !config.Bypasses[0].Whitelist || !config.Bypasses[0].PreferIPv6 {
 		t.Fatalf("bypasses = %+v", config.Bypasses)
 	}
 }

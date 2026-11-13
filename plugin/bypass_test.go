@@ -49,6 +49,40 @@ func TestBypassHandlerMatchesAddresses(t *testing.T) {
 	}
 }
 
+func TestBypassHandlerWhitelistInvertsMatches(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "geo.txt")
+	if err := os.WriteFile(path, []byte("192.0.2.0/24\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := newBypassManager(context.Background(), []BypassConfig{{Name: "geo", File: path, Whitelist: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		addr string
+		want bool
+	}{
+		{addr: "192.0.2.20:443", want: false},
+		{addr: "203.0.113.1:443", want: true},
+	} {
+		body := "{\"network\":\"tcp\",\"addr\":\"" + test.addr + "\"}"
+		r := httptest.NewRequest(http.MethodPost, "/bypass/geo", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		manager.ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("addr %q: status = %d, body = %s", test.addr, w.Code, w.Body.String())
+		}
+		var response bypassResponse
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatal(err)
+		}
+		if response.OK != test.want {
+			t.Errorf("addr %q: ok = %v, want %v", test.addr, response.OK, test.want)
+		}
+	}
+}
+
 func TestBypassUsesFileWhenBothSourcesConfigured(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "geo.txt")
 	if err := os.WriteFile(path, []byte("192.0.2.0/24\n"), 0600); err != nil {

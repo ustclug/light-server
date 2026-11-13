@@ -8,9 +8,11 @@ cache_duration: 30m
 log_path: /var/log/gost/gost.log
 health_path: /var/log/gost/accounting.last
 retention: 180
+post_accounting_action: s6-svc -h /etc/s6/gost
 # bypasses:
 #   - name: example
 #     file: /path/to/file
+#     # whitelist: false
 #     # prefer-ipv6: false
 #     # refresh: 24h
 #   - name: another

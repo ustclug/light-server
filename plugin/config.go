@@ -19,6 +19,7 @@ type Config struct {
 	LogPath                string         `yaml:"log_path"`
 	Retention              int            `yaml:"retention"`
 	HealthPath             string         `yaml:"health_path"`
+	PostAccountingAction   string         `yaml:"post_accounting_action"`
 	TimeoutText            string         `yaml:"radius_timeout"`
 	CacheText              string         `yaml:"cache_duration"`
 	Bypasses               []BypassConfig `yaml:"bypasses"`
@@ -28,6 +29,7 @@ type BypassConfig struct {
 	Name        string        `yaml:"name"`
 	File        string        `yaml:"file"`
 	URL         string        `yaml:"url"`
+	Whitelist   bool          `yaml:"whitelist"`
 	PreferIPv6  bool          `yaml:"prefer-ipv6"`
 	Refresh     time.Duration `yaml:"-"`
 	RefreshText string        `yaml:"refresh"`
