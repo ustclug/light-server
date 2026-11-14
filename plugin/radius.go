@@ -57,9 +57,13 @@ func (b *radiusBackend) Authenticate(ctx context.Context, username, password str
 	return id, true, nil
 }
 
-func (b *radiusBackend) Account(ctx context.Context, username string, bytes uint64, session string) error {
+func (b *radiusBackend) Account(ctx context.Context, username string, inputBytes, outputBytes uint64, session string, sessionStart, sessionEnd time.Time) error {
 	for _, status := range []rfc2866.AcctStatusType{rfc2866.AcctStatusType_Value_Start, rfc2866.AcctStatusType_Value_Stop} {
-		packet, err := accountingPacket([]byte(b.secret), b.nas, username, session, bytes, status)
+		eventTime := sessionStart
+		if status == rfc2866.AcctStatusType_Value_Stop {
+			eventTime = sessionEnd
+		}
+		packet, err := accountingPacket([]byte(b.secret), b.nas, username, session, inputBytes, outputBytes, status, eventTime)
 		if err != nil {
 			return err
 		}
@@ -74,7 +78,7 @@ func (b *radiusBackend) Account(ctx context.Context, username string, bytes uint
 	return nil
 }
 
-func accountingPacket(secret []byte, nas, username, session string, bytes uint64, status rfc2866.AcctStatusType) (*radius.Packet, error) {
+func accountingPacket(secret []byte, nas, username, session string, inputBytes, outputBytes uint64, status rfc2866.AcctStatusType, eventTime time.Time) (*radius.Packet, error) {
 	packet := radius.New(radius.CodeAccountingRequest, secret)
 	if err := rfc2865.UserName_SetString(packet, username); err != nil {
 		return nil, err
@@ -88,11 +92,20 @@ func accountingPacket(secret []byte, nas, username, session string, bytes uint64
 	if err := rfc2866.AcctStatusType_Set(packet, status); err != nil {
 		return nil, err
 	}
+	if err := rfc2869.EventTimestamp_Set(packet, eventTime); err != nil {
+		return nil, err
+	}
 	if status == rfc2866.AcctStatusType_Value_Stop {
-		if err := rfc2866.AcctOutputOctets_Set(packet, rfc2866.AcctOutputOctets(uint32(bytes))); err != nil {
+		if err := rfc2866.AcctInputOctets_Set(packet, rfc2866.AcctInputOctets(uint32(inputBytes))); err != nil {
 			return nil, err
 		}
-		if err := rfc2869.AcctOutputGigawords_Set(packet, rfc2869.AcctOutputGigawords(uint32(bytes>>32))); err != nil {
+		if err := rfc2869.AcctInputGigawords_Set(packet, rfc2869.AcctInputGigawords(uint32(inputBytes>>32))); err != nil {
+			return nil, err
+		}
+		if err := rfc2866.AcctOutputOctets_Set(packet, rfc2866.AcctOutputOctets(uint32(outputBytes))); err != nil {
+			return nil, err
+		}
+		if err := rfc2869.AcctOutputGigawords_Set(packet, rfc2869.AcctOutputGigawords(uint32(outputBytes>>32))); err != nil {
 			return nil, err
 		}
 	}

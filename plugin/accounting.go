@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,14 +22,20 @@ type gostRecord struct {
 	User        string `json:"user"`
 	InputBytes  uint64 `json:"inputBytes"`
 	OutputBytes uint64 `json:"outputBytes"`
+	Time        string `json:"time"`
 }
 
 type accountingSender interface {
-	Account(context.Context, string, uint64, string) error
+	Account(context.Context, string, uint64, uint64, string, time.Time, time.Time) error
 }
 
-func aggregate(r io.Reader) (map[string]uint64, error) {
-	totals := make(map[string]uint64)
+type accountingTotal struct {
+	InputBytes, OutputBytes uint64
+	Start, End              time.Time
+}
+
+func aggregate(r io.Reader) (map[string]accountingTotal, error) {
+	totals := make(map[string]accountingTotal)
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64<<10), 4<<20)
 	for scanner.Scan() {
@@ -42,14 +49,25 @@ func aggregate(r io.Reader) (map[string]uint64, error) {
 		if record.User == "" {
 			continue
 		}
-		sum := record.InputBytes + record.OutputBytes
-		if sum == 0 {
+		if record.InputBytes == 0 && record.OutputBytes == 0 {
 			continue
 		}
-		if sum < record.InputBytes || totals[record.User]+sum < totals[record.User] {
-			return nil, fmt.Errorf("byte total overflow for %q", record.User)
+		total := totals[record.User]
+		if total.InputBytes+record.InputBytes < total.InputBytes {
+			return nil, fmt.Errorf("input byte total overflow for %q", record.User)
 		}
-		totals[record.User] += sum
+		if total.OutputBytes+record.OutputBytes < total.OutputBytes {
+			return nil, fmt.Errorf("output byte total overflow for %q", record.User)
+		}
+		total.InputBytes += record.InputBytes
+		total.OutputBytes += record.OutputBytes
+		if timestamp, err := time.Parse(time.RFC3339Nano, record.Time); err == nil {
+			if total.Start.IsZero() {
+				total.Start = timestamp
+			}
+			total.End = timestamp
+		}
+		totals[record.User] = total
 	}
 	return totals, scanner.Err()
 }
@@ -61,6 +79,7 @@ type accountant struct {
 	prune      func(time.Time)
 	postAction func(context.Context, string) error
 	logf       func(string, ...any)
+	startedAt  time.Time
 }
 
 func (a *accountant) log(format string, args ...any) {
@@ -106,6 +125,8 @@ func (a *accountant) process(ctx context.Context) error {
 }
 
 func (a *accountant) processPending(ctx context.Context) error {
+	defaultStart := a.lastAccountingTime()
+	defaultEnd := a.now()
 	files, err := filepath.Glob(a.config.LogPath + ".pending.*")
 	if err != nil {
 		return err
@@ -115,11 +136,22 @@ func (a *accountant) processPending(ctx context.Context) error {
 		if strings.Contains(path, ".done.") {
 			continue
 		}
-		if err := a.processFile(ctx, path); err != nil {
+		if err := a.processFile(ctx, path, defaultStart, defaultEnd); err != nil {
 			return err
 		}
 	}
 	return os.WriteFile(a.config.HealthPath, []byte(fmt.Sprintf("%d\n", a.now().Unix())), 0644)
+}
+
+func (a *accountant) lastAccountingTime() time.Time {
+	data, err := os.ReadFile(a.config.HealthPath)
+	if err == nil {
+		seconds, parseErr := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+		if parseErr == nil {
+			return time.Unix(seconds, 0)
+		}
+	}
+	return a.startedAt
 }
 
 func (a *accountant) rotateActive(ctx context.Context) error {
@@ -174,7 +206,7 @@ func (a *accountant) runPostAccountingAction(ctx context.Context) error {
 	return err
 }
 
-func (a *accountant) processFile(ctx context.Context, path string) error {
+func (a *accountant) processFile(ctx context.Context, path string, defaultStart, defaultEnd time.Time) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -198,7 +230,15 @@ func (a *accountant) processFile(ctx context.Context, path string) error {
 		if _, err := os.Stat(done); err == nil {
 			continue
 		}
-		if err := a.sender.Account(ctx, user, totals[user], stamp+":"+user); err != nil {
+		total := totals[user]
+		start, end := total.Start, total.End
+		if start.IsZero() {
+			start = defaultStart
+		}
+		if end.IsZero() {
+			end = defaultEnd
+		}
+		if err := a.sender.Account(ctx, user, total.InputBytes, total.OutputBytes, stamp+":"+user, start, end); err != nil {
 			return fmt.Errorf("account %q: %w", user, err)
 		}
 		if err := os.WriteFile(done, nil, 0640); err != nil {

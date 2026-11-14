@@ -23,7 +23,10 @@ func TestAggregateProvidedGOSTLog(t *testing.T) {
 	defer file.Close()
 	totals, err := aggregate(file)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(178136), totals["ibug"])
+	assert.Equal(t, uint64(27147), totals["ibug"].InputBytes)
+	assert.Equal(t, uint64(150989), totals["ibug"].OutputBytes)
+	assert.Equal(t, "2026-11-10T22:23:16.558+08:00", totals["ibug"].Start.Format(time.RFC3339Nano))
+	assert.Equal(t, "2026-11-10T22:23:45.574+08:00", totals["ibug"].End.Format(time.RFC3339Nano))
 }
 
 func TestRotateActiveRunsPostAccountingAction(t *testing.T) {
@@ -204,6 +207,30 @@ func TestArchiveRetainsAndCompressesRotatedFiles(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
+func TestLastAccountingTime(t *testing.T) {
+	startedAt := time.Unix(100, 0)
+	for _, test := range []struct {
+		name     string
+		record   *string
+		expected time.Time
+	}{
+		{name: "recorded timestamp", record: stringPointer("123\n"), expected: time.Unix(123, 0)},
+		{name: "missing record", expected: startedAt},
+		{name: "invalid record", record: stringPointer("invalid\n"), expected: startedAt},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			healthPath := filepath.Join(t.TempDir(), "accounting.last")
+			if test.record != nil {
+				require.NoError(t, os.WriteFile(healthPath, []byte(*test.record), 0644))
+			}
+			a := accountant{config: Config{HealthPath: healthPath}, startedAt: startedAt}
+			assert.Equal(t, test.expected, a.lastAccountingTime())
+		})
+	}
+}
+
+func stringPointer(value string) *string { return &value }
+
 func TestAggregateIgnoresUnrelatedAndZeroByteLines(t *testing.T) {
 	log := strings.Join([]string{
 		"not JSON",
@@ -217,5 +244,28 @@ func TestAggregateIgnoresUnrelatedAndZeroByteLines(t *testing.T) {
 
 	totals, err := aggregate(strings.NewReader(log))
 	require.NoError(t, err)
-	assert.Equal(t, map[string]uint64{"alice": 18, "bob": 30}, totals)
+	assert.Equal(t, uint64(7), totals["alice"].InputBytes)
+	assert.Equal(t, uint64(11), totals["alice"].OutputBytes)
+	assert.Equal(t, uint64(13), totals["bob"].InputBytes)
+	assert.Equal(t, uint64(17), totals["bob"].OutputBytes)
+}
+
+func TestAggregateTracksEachUsersFirstAndLastRecord(t *testing.T) {
+	log := strings.Join([]string{
+		`{"time":"2026-11-14T01:00:00Z","user":"alice","inputBytes":1}`,
+		`{"time":"2026-11-14T01:01:00Z","user":"bob","inputBytes":2}`,
+		`{"time":"2026-11-14T01:02:00Z","user":"alice","outputBytes":3}`,
+		`{"time":"2026-11-14T01:03:00Z","user":"bob","outputBytes":4}`,
+	}, "\n")
+
+	totals, err := aggregate(strings.NewReader(log))
+	require.NoError(t, err)
+	assert.Equal(t, uint64(1), totals["alice"].InputBytes)
+	assert.Equal(t, uint64(3), totals["alice"].OutputBytes)
+	assert.Equal(t, "2026-11-14T01:00:00Z", totals["alice"].Start.Format(time.RFC3339))
+	assert.Equal(t, "2026-11-14T01:02:00Z", totals["alice"].End.Format(time.RFC3339))
+	assert.Equal(t, uint64(2), totals["bob"].InputBytes)
+	assert.Equal(t, uint64(4), totals["bob"].OutputBytes)
+	assert.Equal(t, "2026-11-14T01:01:00Z", totals["bob"].Start.Format(time.RFC3339))
+	assert.Equal(t, "2026-11-14T01:03:00Z", totals["bob"].End.Format(time.RFC3339))
 }

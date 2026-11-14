@@ -15,6 +15,7 @@ import (
 )
 
 func main() {
+	startedAt := time.Now()
 	configPath := flag.String("C", "/opt/plugin.yml", "configuration file")
 	flag.Parse()
 
@@ -53,7 +54,7 @@ func main() {
 			}
 		}
 	}()
-	acct := &accountant{config: config, sender: backend, now: time.Now, prune: handler.pruneExpired}
+	acct := &accountant{config: config, sender: backend, now: time.Now, prune: handler.pruneExpired, startedAt: startedAt}
 	usr1 := make(chan os.Signal, 1)
 	signal.Notify(usr1, syscall.SIGUSR1)
 	defer signal.Stop(usr1)
