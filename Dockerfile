@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG GOST_VERSION=3.3.3
+ARG GOST_VERSION=3.2.6
 
 FROM golang:1.27-alpine AS plugin-build
 WORKDIR /src
