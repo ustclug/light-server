@@ -49,7 +49,7 @@ services:
     name: auto
     addr: 0.0.0.0:29979
     resolver: light-dns
-    bypasses: [allowed, deny]
+    bypasses: [allow, deny]
     handler:
       type: auto
       auther: radius
